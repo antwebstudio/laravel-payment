@@ -2,15 +2,18 @@
 
 namespace Ant\Payment\Models;
 
-use App\Models\Contact;
 use Illuminate\Support\Str;
+use Ant\Contact\Contracts\Contact;
 use Illuminate\Support\Facades\URL;
+use Ant\Payment\Contracts\BillableItem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class PaymentInvoice extends Model
 {
     use HasFactory;
+    use \Ant\Payment\Traits\HasBillableItems;
+    use \Ant\Payment\Traits\BillTrait;
 
     const STATUS_UNPAID = 0;
     const STATUS_ACTIVE = 0;
@@ -53,7 +56,7 @@ class PaymentInvoice extends Model
     }
 
     public function billedTo() {
-      return $this->belongsTo(Contact::class, 'billed_to');
+      return $this->belongsTo(\App\Models\Contact::class, 'billed_to');
     }
 
     public function isFree()
@@ -163,8 +166,30 @@ class PaymentInvoice extends Model
       return $this;
     }
 
+    public function billTo(Contact $contact) {
+      $this->billedTo()->associate($contact);
+    }
+
     public function validateAmount() {
       $this->getCalculatedPaidAmount();
+    }
+
+    public function addItem(BillableItem $item, $quantity = 1) {
+      $item = $this->items()->create([
+        'item_id' => $item->getItemId(),
+        'title' => $item->getName(),
+        'quantity' => $quantity,
+        'unit_price' => $item->getUnitPrice(),
+        'discount_value' => 0,
+        'discount_type' => 0,
+        'included_in_subtotal' => 1,
+        'additional_discount' => 0,
+        'discount_amount' => 0.00,
+        'discount_percent' => 0.00
+      ]);
+      $this->load('items');
+
+      return $item;
     }
 
     protected static function newFactory() {

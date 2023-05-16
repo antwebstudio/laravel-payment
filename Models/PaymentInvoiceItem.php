@@ -29,7 +29,16 @@ class PaymentInvoiceItem extends Model
     ];
 
     public function getNameAttribute() {
+      return $this->getName();
+    }
+
+    public function getName() {
       return $this->title;
+    }
+
+    public function total()
+    {
+      return $this->unit_price * $this->quantity;
     }
 
     public function getDisplayTotalAttribute() {
