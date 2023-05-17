@@ -11,6 +11,52 @@ use App\Models\Contact;
 
 class InvoiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        PaymentInvoice::setupSerialNumberFormat('INV-{######}');
+    }
+
+    public function testSerialNumber()
+    {
+        $contact = Contact::factory()->create();
+
+        $invoice = PaymentInvoice::make();
+        $invoice->billTo($contact);
+        
+        $invoice->save();
+
+        $invoice->refresh();
+
+        $this->assertEquals('INV-000001', $invoice->reference);
+    }
+    
+    public function testSerialNumber2()
+    {
+        PaymentInvoice::setupSerialNumberFormat('#{######}', 88);
+
+        $contact = Contact::factory()->create();
+
+        $invoice = PaymentInvoice::make();
+        $invoice->billTo($contact);
+        
+        $invoice->save();
+
+        $invoice->refresh();
+
+        $this->assertEquals('#000088', $invoice->reference);
+
+        $invoice = PaymentInvoice::make();
+        $invoice->billTo($contact);
+        
+        $invoice->save();
+
+        $invoice->refresh();
+
+        $this->assertEquals('#000089', $invoice->reference);
+    }
+
     public function testBillTo()
     {
         $contact = Contact::factory()->create();
@@ -33,7 +79,10 @@ class InvoiceTest extends TestCase
         $this->assertEquals($contact->getContactNumber(), $invoice->billedTo->getContactNumber());
         $this->assertEquals($contact->getOrganization(), $invoice->billedTo->getOrganization());
         $this->assertEquals($contact->getEmail(), $invoice->billedTo->getEmail());
+
         $this->assertEquals(0, $invoice->total());
+        $this->assertEquals(0, $invoice->getDueAmount());
+        $this->assertEquals(PaymentInvoice::STATUS_ACTIVE, $invoice->status);
     }
 
     public function testAddItem()
@@ -59,6 +108,7 @@ class InvoiceTest extends TestCase
 
         $this->assertEquals(1, $invoice->items->count());
         $this->assertEquals($unitPrice, $invoice->total());
+        $this->assertEquals($unitPrice, $invoice->getDueAmount());
         $this->assertEquals($name, $invoice->items->first()->getName());
     }
 }

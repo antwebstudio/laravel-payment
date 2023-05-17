@@ -13,7 +13,6 @@ class PaymentInvoiceItem extends Model
 
     protected $fillable = [
       'invoice_id',
-      'item_id',
       'title',
       'description',
       'quantity',
@@ -27,6 +26,10 @@ class PaymentInvoiceItem extends Model
       'discount_amount',
       'discount_percent'
     ];
+
+    public function item() {
+      return $this->morphTo();
+    }
 
     public function getNameAttribute() {
       return $this->getName();

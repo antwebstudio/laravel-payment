@@ -14,6 +14,7 @@ class PaymentInvoice extends Model
     use HasFactory;
     use \Ant\Payment\Traits\HasBillableItems;
     use \Ant\Payment\Traits\BillTrait;
+    use \Ant\SerialNumber\Traits\HasSerialNumber;
 
     const STATUS_UNPAID = 0;
     const STATUS_ACTIVE = 0;
@@ -82,6 +83,9 @@ class PaymentInvoice extends Model
 
     public function getReferenceAttribute()
     {
+      if (isset($this->formatted_id)) {
+        return $this->formatted_id;
+      }
       return '#'.Str::padLeft($this->id, 5, '0');
     }
 
@@ -174,12 +178,11 @@ class PaymentInvoice extends Model
       $this->getCalculatedPaidAmount();
     }
 
-    public function addItem(BillableItem $item, $quantity = 1) {
-      $item = $this->items()->create([
-        'item_id' => $item->getItemId(),
-        'title' => $item->getName(),
+    protected function makeItem($title, $unitPrice, $quantity) {
+      return $this->items()->make([
+        'title' => $title,
         'quantity' => $quantity,
-        'unit_price' => $item->getUnitPrice(),
+        'unit_price' => $unitPrice,
         'discount_value' => 0,
         'discount_type' => 0,
         'included_in_subtotal' => 1,
@@ -187,12 +190,59 @@ class PaymentInvoice extends Model
         'discount_amount' => 0.00,
         'discount_percent' => 0.00
       ]);
+    }
+
+    public function addItemWithCustomPrice(BillableItem $item, $unitPrice, $quantity = 1) {
+      $invoiceItem = $this->makeItem($item->getName(), $unitPrice, $quantity);
+      
+      $invoiceItem->save();
+      $invoiceItem->item()->associate($item);
+      $invoiceItem->save();
+
       $this->load('items');
 
-      return $item;
+      $this->recalculateTotalAmount();
+
+      return $invoiceItem;
+    }
+
+    public function addItem(BillableItem $item, $quantity = 1) {
+      $invoiceItem = $this->makeItem($item->getName(), $item->getUnitPrice(), $quantity);
+      
+      $invoiceItem->save();
+      $invoiceItem->item()->associate($item);
+      $invoiceItem->save();
+
+      $this->load('items');
+
+      $this->recalculateTotalAmount();
+
+      return $invoiceItem;
+    }
+
+    public function addItemLine($title, $unitPrice, $quantity = 1) {
+      $invoiceItem = $this->makeItem($title, $unitPrice, $quantity);
+      $invoiceItem->save();
+
+      $this->load('items');
+      
+      $this->recalculateTotalAmount();
+
+      return $invoiceItem;
+
     }
 
     protected static function newFactory() {
       return new \Database\Factories\InvoiceFactory();
+    }
+
+    protected function getSerialNumberColumn()
+    {
+      return 'formatted_id';
+    }
+
+    protected static function getSerialNumberType()
+    {
+        return 'invoice';
     }
 }
