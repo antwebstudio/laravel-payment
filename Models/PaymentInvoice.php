@@ -44,7 +44,7 @@ class PaymentInvoice extends Model
       'billable_class_id'
     ];
 
-    protected $appends = ['statusHtml', 'isPaid', 'paymentUrl'];
+    protected $appends = ['statusHtml', 'isPaid', 'paymentUrl', 'display_attendee'];
 
     protected $_calculatedPaidAmount;
 
@@ -57,7 +57,7 @@ class PaymentInvoice extends Model
     }
 
     public function billedTo() {
-      return $this->belongsTo(\App\Models\Contact::class, 'billed_to');
+      return $this->belongsTo(\Ant\Contact\Models\Contact::class, 'billed_to');
     }
 
     public function isFree()
@@ -118,7 +118,9 @@ class PaymentInvoice extends Model
     }
 
     public function getDisplayAttendeeAttribute() {
-      return $this->billedTo->display_name;
+      if ($this->billedTo) {
+        return $this->billedTo->display_name;
+      }
     }
 
     public function getCalculatedPaidAmount() {
