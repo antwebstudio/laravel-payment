@@ -2,7 +2,7 @@
 namespace Ant\Payment\Traits;
 
 trait HasBillableItems {
-    public function bootHasBillableItems() {
+    public static function bootHasBillableItems() {
         static::saving(function($model) {
             if (!isset($model->total_amount)) {
                 $model->recalculateTotalAmount();
