@@ -11,11 +11,13 @@ use App\Models\Contact;
 
 class InvoiceTest extends TestCase
 {
+    use \Illuminate\Foundation\Testing\DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();
         
-        PaymentInvoice::setupSerialNumberFormat('INV-{######}');
+        PaymentInvoice::setupSerialNumberFormat('INV123-{######}');
     }
 
     public function testSerialNumber()
@@ -29,11 +31,14 @@ class InvoiceTest extends TestCase
 
         $invoice->refresh();
 
-        $this->assertEquals('INV-000001', $invoice->reference);
+        $this->assertEquals('INV123-000001', $invoice->reference);
     }
     
     public function testSerialNumber2()
     {
+        PaymentInvoice::where('formatted_id', '#000088')->forceDelete();
+        PaymentInvoice::where('formatted_id', '#000089')->forceDelete();
+
         PaymentInvoice::setupSerialNumberFormat('#{######}', 88);
 
         $contact = Contact::factory()->create();
