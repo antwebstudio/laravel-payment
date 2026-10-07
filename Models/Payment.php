@@ -40,12 +40,24 @@ class Payment extends Model
         return [];
     }
 
+    /**
+     * Methods of payments received outside the payment gateways and recorded by an admin
+     * (see PaymentInvoice::recordPayment()), stored as the payment gateway.
+     */
+    const MANUAL_METHODS = [
+        'cash' => 'Cash',
+        'bank_transfer' => 'Bank Transfer',
+        'cheque' => 'Cheque',
+        'online' => 'Online Payment',
+        'other' => 'Other',
+    ];
+
     public function getPaymentMethodNameAttribute() {
         $name = [
             'App\PaymentGateeway\BankWire' => 'Bank Transfer',
             'ant\payment\components\FaceToFacePaymentMethod' => 'Face to face',
         ];
-        return $name[$this->payment_gateway] ?? $this->payment_gateway;
+        return $name[$this->payment_gateway] ?? static::MANUAL_METHODS[$this->payment_gateway] ?? $this->payment_gateway;
     }
 
     public function getDisplayTransactionIdAttribute() {
@@ -58,7 +70,8 @@ class Payment extends Model
         if (in_array($this->payment_gateway, $noTransactionId)) {
             return '-';
         }
-        return $this->transaction_id;
+        // A recorded payment may come without a reference number.
+        return $this->transaction_id ?: '-';
     }
 
     public function getStatusHtmlAttribute() {

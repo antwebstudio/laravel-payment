@@ -55,6 +55,8 @@ class PaymentInvoice extends Model
 
     const CURRENCY = 'RM';
 
+    const CURRENCY_CODE = 'MYR';
+
     protected $_calculatedPaidAmount;
 
     public function items() {
@@ -104,6 +106,35 @@ class PaymentInvoice extends Model
      */
     public function getPaymentStatusLabel(): string {
       return $this->isPaid() ? 'Paid' : 'Unpaid';
+    }
+
+    /**
+     * Record a payment received outside the payment gateways (e.g. cash at the counter), as approved,
+     * and add it to the paid amount.
+     *
+     * @param  string  $method  a key of {@see Payment::MANUAL_METHODS}
+     */
+    public function recordPayment($amount, string $method, $paidAt = null, ?string $reference = null, ?string $remark = null, array $data = []): Payment {
+      return DB::transaction(function () use ($amount, $method, $paidAt, $reference, $remark, $data) {
+        $payment = $this->payments()->create([
+          'payment_gateway' => $method,
+          'transaction_id' => $reference,
+          'amount' => $amount,
+          'currency' => static::CURRENCY_CODE,
+          'status' => Payment::STATUS_SUCCESS,
+          'is_valid' => 1,
+          'paid_at' => $paidAt ?? now(),
+          'paid_by' => $this->getBilledUser()?->getKey(),
+          'remark' => $remark,
+          'data' => $data,
+        ]);
+
+        // pay() checks the paid amount against the payments, which must include the new one.
+        $this->unsetRelation('payments');
+        $this->pay($amount);
+
+        return $payment;
+      });
     }
 
     /**
