@@ -17,7 +17,9 @@ class InvoiceTest extends TestCase
     {
         parent::setUp();
         
-        PaymentInvoice::setupSerialNumberFormat('INV123-{######}');
+        // Tests run against a shared database: reset the counter (rolled back with the
+        // transaction) so the expected numbers don't depend on existing invoices.
+        PaymentInvoice::setupSerialNumberFormat('INV123-{######}', 1);
     }
 
     public function testSerialNumber()
@@ -36,10 +38,8 @@ class InvoiceTest extends TestCase
     
     public function testSerialNumber2()
     {
-        PaymentInvoice::where('formatted_id', '#000088')->forceDelete();
-        PaymentInvoice::where('formatted_id', '#000089')->forceDelete();
-
-        PaymentInvoice::setupSerialNumberFormat('#{######}', 88);
+        // A prefix no real invoice uses, so the generated references can't collide.
+        PaymentInvoice::setupSerialNumberFormat('TEST#{######}', 88);
 
         $contact = Contact::factory()->create();
 
@@ -50,7 +50,7 @@ class InvoiceTest extends TestCase
 
         $invoice->refresh();
 
-        $this->assertEquals('#000088', $invoice->reference);
+        $this->assertEquals('TEST#000088', $invoice->reference);
 
         $invoice = PaymentInvoice::make();
         $invoice->billTo($contact);
@@ -59,7 +59,7 @@ class InvoiceTest extends TestCase
 
         $invoice->refresh();
 
-        $this->assertEquals('#000089', $invoice->reference);
+        $this->assertEquals('TEST#000089', $invoice->reference);
     }
 
     public function testBillTo()
