@@ -2,7 +2,9 @@
 
 namespace Ant\Payment\Models;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Ant\Contact\Contracts\Contact;
 use Illuminate\Support\Facades\URL;
 use Ant\Payment\Contracts\BillableItem;
@@ -46,6 +48,13 @@ class PaymentInvoice extends Model
 
     protected $appends = ['statusHtml', 'isPaid', 'paymentUrl', 'display_attendee'];
 
+    protected $casts = [
+      'issue_date' => 'datetime',
+      'due_date' => 'datetime',
+    ];
+
+    const CURRENCY = 'RM';
+
     protected $_calculatedPaidAmount;
 
     public function items() {
@@ -71,6 +80,80 @@ class PaymentInvoice extends Model
 
     public function getDueAmount() {
       return $this->total_amount - $this->paid_amount;
+    }
+
+    /**
+     * Invoices that {@see isPaid()}: a free invoice once its status is paid, else when nothing is left due.
+     */
+    public function scopePaid($query) {
+      $query->where(fn ($query) => $query
+        ->where(fn ($query) => $query->where('total_amount', 0)->where('status', static::STATUS_PAID))
+        ->orWhere(fn ($query) => $query->where('total_amount', '<>', 0)->whereColumn('paid_amount', '>=', 'total_amount')));
+    }
+
+    public function scopeUnpaid($query) {
+      $query->whereNot(fn ($query) => $query->paid());
+    }
+
+    public static function formatAmount($amount) {
+      return static::CURRENCY.' '.number_format((float) $amount, 2);
+    }
+
+    /**
+     * Status label shown in the admin panel ("Active" of {@see getStatusTextAttribute()} reads oddly for an unpaid invoice).
+     */
+    public function getPaymentStatusLabel(): string {
+      return $this->isPaid() ? 'Paid' : 'Unpaid';
+    }
+
+    /**
+     * The user the invoice is billed to, through the contact of the user's profile.
+     */
+    public function getBilledUser(): ?Model {
+      return $this->billedTo?->profile?->user;
+    }
+
+    /**
+     * Total of invoice lines given as rows with `unit_price` and `quantity`.
+     */
+    public static function totalOfItems(array $rows): float {
+      return round(collect($rows)->sum(fn ($row) => (float) ($row['unit_price'] ?? 0) * (int) ($row['quantity'] ?? 0)), 2);
+    }
+
+    /**
+     * Replace the invoice lines with `$rows` (`id`, `title`, `unit_price`, `quantity`) and recalculate the total.
+     * A row carrying the id of an existing line updates it, keeping its link to the billed item
+     * (e.g. a subscription package); lines left out are removed.
+     * An invoice marked as paid manually stays fully paid at its new total.
+     */
+    public function syncItems(array $rows): void {
+      DB::transaction(function () use ($rows) {
+        $keptIds = [];
+
+        foreach ($rows as $row) {
+          $attributes = Arr::only($row, ['title', 'unit_price', 'quantity']);
+          $item = isset($row['id']) ? $this->items()->find($row['id']) : null;
+
+          if ($item) {
+            $item->update($attributes);
+          } else {
+            $item = $this->items()->create($attributes);
+          }
+
+          $keptIds[] = $item->id;
+        }
+
+        $this->items()->whereKeyNot($keptIds)->delete();
+
+        $this->load('items');
+        $this->recalculateTotalAmount();
+
+        if ($this->status == static::STATUS_PAID_MANUALLY) {
+          $this->paid_amount = $this->total_amount;
+        }
+
+        $this->save();
+      });
     }
 
     public function getIsPaidAttribute() {
